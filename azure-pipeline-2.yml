@@ -1,0 +1,64 @@
+trigger:
+- none
+
+pool: 
+  name: 'Onprem-UAT-Agent'
+
+variables:
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Release'
+  solution: '**/RoundTheCode.AzureTestProject.sln'
+  project: '**/RoundTheCode.AzureTestProject.csproj'
+
+steps:
+- task: NuGetToolInstaller@1
+  displayName: 'NuGet tool installer'
+
+- task: NuGetCommand@2
+  displayName: 'NuGet restore packages'
+  inputs:
+    command: 'restore'
+    restoreSolution: '$(solution)'
+    feedsToUse: 'select'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Run tests'
+  inputs:
+    command: 'test'
+    projects: '$(solution)'
+    arguments: '--configuration $(BuildConfiguration)'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Publish'
+  inputs:
+    command: 'publish'
+    publishWebProjects: false
+    projects: '$(project)'
+    arguments: '--configuration $(BuildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+    zipAfterPublish: false
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifacts'
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'AzureTestProject'
+
+stages:
+- stage: DeployWebsite
+  displayName: 'Deploy website'        
+  pool:
+    vmImage: windows-latest
+    
+  jobs:    
+  - deployment: DeployWebsite
+    displayName: 'Deploy website'
+    environment: 'Production.DAVE'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: none
+          
+          - download: current
+            displayName: 'Download build artifacts'
+            artifact: 'AzureTestProject'
